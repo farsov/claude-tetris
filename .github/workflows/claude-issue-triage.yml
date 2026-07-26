@@ -1,0 +1,76 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Issue Triage
+        id: claude-triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          use_sticky_comment: true
+
+          prompt: |
+            Estás analizando el issue #${{ github.event.issue.number }} de este repositorio
+            (un juego de Tetris hecho en HTML5 Canvas + CSS + JavaScript vanilla, sin build
+            tooling: index.html, style.css, game.js).
+
+            Título: ${{ github.event.issue.title }}
+            Cuerpo:
+            ${{ github.event.issue.body }}
+
+            Tu tarea tiene dos partes. NO edites archivos del repositorio ni crees commits o
+            pull requests: solo puedes gestionar labels y comentar en el issue.
+
+            1. LABELS
+               Elige entre 1 y 3 labels que mejor describan el issue, tomados únicamente de
+               este set fijo para el proyecto:
+                 - bug            (#d73a4a) — algo no funciona como debería
+                 - enhancement    (#a2eeef) — mejora o funcionalidad nueva
+                 - ui             (#c5def5) — estilos, layout, aspecto visual (style.css/index.html)
+                 - game-logic     (#5319e7) — reglas del juego, colisiones, rotación, scoring (game.js)
+                 - performance    (#fbca04) — lentitud, fps, uso de recursos
+                 - documentation  (#0075ca) — README u otra documentación
+                 - question       (#d876e3) — pregunta, no reporta un problema concreto
+
+               Antes de aplicar un label, comprueba si ya existe en el repo con
+               `gh label list`. Si no existe, créalo con
+               `gh label create "<nombre>" --color "<hex-sin-#>" --force` usando el color
+               indicado arriba, y luego aplícalo con
+               `gh issue edit ${{ github.event.issue.number }} --add-label "<nombre>"`.
+               No apliques labels fuera de este set.
+
+            2. DIAGNÓSTICO
+               Si el issue describe un problema o una mejora concreta, revisa el código fuente
+               relevante (game.js, index.html, style.css) para localizar la zona probablemente
+               implicada, y publica un comentario en el issue con
+               `gh issue comment ${{ github.event.issue.number }} --body "..."` usando este
+               formato:
+
+               ## 🔍 Diagnóstico
+
+               **Resumen:** (1-2 frases de qué está pasando o qué se pide)
+               **Área afectada:** (archivo y función/sección concreta si se identifica, o "no determinada" si el issue no da suficiente info)
+               **Causa probable:** (hipótesis técnica, o "pendiente de más información" si aplica)
+               **Próximos pasos sugeridos:** (lista breve de alto nivel para abordar la solución, sin escribir código)
+
+               Si el issue es una pregunta (label `question`) sin nada que diagnosticar, responde
+               brevemente a la pregunta en vez de usar el formato de diagnóstico.
+
+          claude_args: |
+            --allowedTools "Read,Grep,Glob,Bash(gh label list:*),Bash(gh label create:*),Bash(gh issue edit:*),Bash(gh issue comment:*)"
